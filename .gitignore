@@ -1,0 +1,12 @@
+# Arquivos grandes e temporários
+*.zip
+*.pt
+*.pdf
+foto_cand2024_SP/
+irregular_acessorios_cabeca/
+irregular_oculos_escuros/
+resultados1/
+weights/
+__pycache__/
+.venv/
+env/
