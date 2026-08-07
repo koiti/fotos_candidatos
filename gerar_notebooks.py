@@ -1,4 +1,6 @@
-{
+import json
+
+notebook_cabeca = {
   "cells": [
     {
       "cell_type": "markdown",
@@ -20,7 +22,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -39,7 +41,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -59,7 +61,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -73,7 +75,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -101,7 +103,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -249,7 +251,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -275,7 +277,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -301,7 +303,7 @@
     },
     {
       "cell_type": "code",
-      "execution_count": null,
+      "execution_count": None,
       "metadata": {},
       "outputs": [],
       "source": [
@@ -320,3 +322,8 @@
   "nbformat": 4,
   "nbformat_minor": 2
 }
+
+with open("detectar_acessorios_cabeca_colab.ipynb", "w", encoding="utf-8") as f:
+    json.dump(notebook_cabeca, f, ensure_ascii=False, indent=2)
+
+print("detectar_acessorios_cabeca_colab.ipynb gerado com sucesso!")
