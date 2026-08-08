@@ -1,5 +1,48 @@
 import json
 
+# Code block for Option B in Passo 2 (Auto-search for ZIP in Google Drive)
+code_opcao_b = [
+    "# OPÇÃO B: Processar Dataset Grande (foto_cand2024_SP_div.zip com 78k fotos e 2GB) via Google Drive\n",
+    "# DICA DE DESEMPENHO: O código busca o arquivo .zip no seu Drive (na mesma pasta do notebook ou subpastas),\n",
+    "# copia para o SSD local da máquina do Colab em segundos e descompacta lá. Isso deixa o I/O 50x mais rápido!\n",
+    "from google.colab import drive\n",
+    "import os\n",
+    "from pathlib import Path\n",
+    "\n",
+    "drive.mount('/content/drive')\n",
+    "\n",
+    "zip_name = 'foto_cand2024_SP_div.zip'\n",
+    "zip_found = None\n",
+    "\n",
+    "# Verificar locais comuns no Google Drive\n",
+    "search_paths = [\n",
+    "    Path('/content/drive/MyDrive') / zip_name,\n",
+    "    Path('/content/drive/MyDrive/UFABC/2026-TOPICOS_DE_IA') / zip_name,\n",
+    "    Path('/content/drive/MyDrive/2026-TOPICOS_DE_IA') / zip_name\n",
+    "]\n",
+    "\n",
+    "for p in search_paths:\n",
+    "    if p.exists():\n",
+    "        zip_found = p\n",
+    "        break\n",
+    "\n",
+    "if not zip_found:\n",
+    "    print(f\"🔍 Procurando '{zip_name}' no seu Google Drive...\")\n",
+    "    matches = list(Path('/content/drive/MyDrive').rglob(zip_name))\n",
+    "    if matches:\n",
+    "        zip_found = matches[0]\n",
+    "\n",
+    "if zip_found:\n",
+    "    print(f\"-> Arquivo localizado com sucesso: {zip_found}\")\n",
+    "    print(\"-> Copiando .zip do Drive para o SSD ultrarrápido do Colab...\")\n",
+    "    !cp \"{zip_found}\" /content/\n",
+    "    print(\"-> Descompactando 78.000 fotos no SSD local...\")\n",
+    "    !unzip -q /content/foto_cand2024_SP_div.zip -d /content/foto_cand2024_SP\n",
+    "    print(\"-> SUCESSO! 78.000 fotos prontas para análise ultrarrápida na pasta '/content/foto_cand2024_SP'!\")\n",
+    "else:\n",
+    "    print(f\"⚠️ Arquivo '{zip_name}' não encontrado no seu Google Drive. Verifique se o upload foi concluído.\")"
+]
+
 # ==============================================================================
 # 🧢 NOTEBOOK: DETECTOR DE ACESSÓRIOS DE CABEÇA
 # ==============================================================================
@@ -38,10 +81,9 @@ notebook_cabeca = {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## 📁 Passo 2: Extrair Fotos de Amostra do GitHub (ou Montar Drive / Upload)\n",
+        "## 📁 Passo 2: Extrair Fotos (Amostra do GitHub ou foto_cand2024_SP_div.zip do Drive)\n",
         "\n",
-        "Escolha uma das opções abaixo no Colab. Por padrão, a **Opção A** baixa e extrai as fotos do repositório GitHub:\n",
-        "https://github.com/koiti/fotos_candidatos/tree/main/amostras"
+        "Escolha uma das opções abaixo no Colab. A **Opção B** detecta automaticamente o arquivo `foto_cand2024_SP_div.zip` na pasta do seu Google Drive e descompacta no SSD local."
       ]
     },
     {
@@ -50,7 +92,7 @@ notebook_cabeca = {
       "metadata": {},
       "outputs": [],
       "source": [
-        "# OPÇÃO A: Extrair fotos de amostra diretamente do GitHub (Recomendado)\n",
+        "# OPÇÃO A: Extrair fotos de amostra diretamente do GitHub (Recomendado para testes rápidos)\n",
         "import os\n",
         "import shutil\n",
         "\n",
@@ -68,27 +110,7 @@ notebook_cabeca = {
       "execution_count": None,
       "metadata": {},
       "outputs": [],
-      "source": [
-        "# OPÇÃO B: Processar Dataset Grande (ex: foto_cand2024_SP_div.zip com 78k fotos e 2GB) via Google Drive\n",
-        "# DICA DE DESEMPENHO: Fazer o upload do arquivo .zip para o seu Google Drive. Depois, o código abaixo copia o .zip\n",
-        "# do Drive para o SSD local da máquina do Colab em segundos e descompacta lá. Isso deixa o I/O 50x mais rápido!\n",
-        "from google.colab import drive\n",
-        "import os\n",
-        "\n",
-        "drive.mount('/content/drive')\n",
-        "\n",
-        "# Ajuste o caminho abaixo para onde você colocou o foto_cand2024_SP_div.zip no seu Google Drive:\n",
-        "zip_no_drive = '/content/drive/MyDrive/foto_cand2024_SP_div.zip'\n",
-        "\n",
-        "if os.path.exists(zip_no_drive):\n",
-        "    print('-> Copiando .zip do Drive para o SSD ultrarrápido do Colab...')\n",
-        "    !cp '{zip_no_drive}' /content/\n",
-        "    print('-> Descompactando fotos no SSD local...')\n",
-        "    !unzip -q /content/foto_cand2024_SP_div.zip -d /content/foto_cand2024_SP\n",
-        "    print(\"-> Sucesso! 78.000 fotos prontas para análise ultrarrápida na pasta '/content/foto_cand2024_SP'!\")\n",
-        "else:\n",
-        "    print(f'⚠️ Arquivo {zip_no_drive} não encontrado. Verifique o caminho ou nome do arquivo no seu Google Drive.')"
-      ]
+      "source": code_opcao_b
     },
     {
       "cell_type": "code",
@@ -161,6 +183,9 @@ notebook_cabeca = {
         "    batch_size=64\n",
         "):\n",
         "    target_input = Path(input_dir)\n",
+        "    if not target_input.exists() and Path('/content/foto_cand2024_SP').exists():\n",
+        "        target_input = Path('/content/foto_cand2024_SP')\n",
+        "\n",
         "    target_output = Path(output_dir)\n",
         "    target_output.mkdir(exist_ok=True, parents=True)\n",
         "\n",
@@ -273,8 +298,11 @@ notebook_cabeca = {
       "outputs": [],
       "source": [
         "# Executar a detecção com limiar de 90% de confiança\n",
+        "# Por padrão usa 'amostras' se existir, ou '/content/foto_cand2024_SP' se o dataset do Drive foi extraído\n",
+        "pasta_fotos = '/content/foto_cand2024_SP' if os.path.exists('/content/foto_cand2024_SP') else 'amostras'\n",
+        "\n",
         "resultado = executar_deteccao_acessorios_cabeca_colab(\n",
-        "    input_dir='amostras',\n",
+        "    input_dir=pasta_fotos,\n",
         "    output_dir='irregular_acessorios_cabeca',\n",
         "    conf_thresh=0.90\n",
         ")\n",
@@ -304,7 +332,7 @@ notebook_cabeca = {
         "\n",
         "if fotos_irregulares:\n",
         "    print(f'Exibindo {len(fotos_irregulares)} fotos irregulares:')\n",
-        "    for f in fotos_irregulares:\n",
+        "    for f in fotos_irregulares[:20]:  # Exibe até as primeiras 20 para visualização\n",
         "        print(f'📷 {f.name}')\n",
         "        display(IPImage(filename=str(f), width=350))\n",
         "else:\n",
@@ -380,10 +408,9 @@ notebook_oculos = {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## 📁 Passo 2: Extrair Fotos de Amostra do GitHub (ou Montar Drive / Upload)\n",
+        "## 📁 Passo 2: Extrair Fotos (Amostra do GitHub ou foto_cand2024_SP_div.zip do Drive)\n",
         "\n",
-        "Escolha uma das opções abaixo no Colab. Por padrão, a **Opção A** baixa e extrai as fotos do repositório GitHub:\n",
-        "[https://github.com/koiti/fotos_candidatos/tree/main/amostras](https://github.com/koiti/fotos_candidatos/tree/main/amostras)"
+        "Escolha uma das opções abaixo no Colab. A **Opção B** detecta automaticamente o arquivo `foto_cand2024_SP_div.zip` na pasta do seu Google Drive e descompacta no SSD local."
       ]
     },
     {
@@ -392,7 +419,7 @@ notebook_oculos = {
       "metadata": {},
       "outputs": [],
       "source": [
-        "# OPÇÃO A: Extrair fotos de amostra diretamente do GitHub (Recomendado)\n",
+        "# OPÇÃO A: Extrair fotos de amostra diretamente do GitHub (Recomendado para testes rápidos)\n",
         "import os\n",
         "import shutil\n",
         "\n",
@@ -410,14 +437,7 @@ notebook_oculos = {
       "execution_count": None,
       "metadata": {},
       "outputs": [],
-      "source": [
-        "# OPÇÃO B: Montar o seu Google Drive (recomendado para pastas grandes como foto_cand2024_SP)\n",
-        "from google.colab import drive\n",
-        "drive.mount('/content/drive')\n",
-        "\n",
-        "# Exemplo de caminho no seu Drive:\n",
-        "# input_path = '/content/drive/MyDrive/UFABC/2026-TOPICOS_DE_IA/foto_cand2024_SP'"
-      ]
+      "source": code_opcao_b
     },
     {
       "cell_type": "code",
@@ -482,6 +502,9 @@ notebook_oculos = {
         "    batch_size=64\n",
         "):\n",
         "    target_input = Path(input_dir)\n",
+        "    if not target_input.exists() and Path('/content/foto_cand2024_SP').exists():\n",
+        "        target_input = Path('/content/foto_cand2024_SP')\n",
+        "\n",
         "    target_output = Path(output_dir)\n",
         "    target_output.mkdir(exist_ok=True, parents=True)\n",
         "\n",
@@ -613,8 +636,11 @@ notebook_oculos = {
       "outputs": [],
       "source": [
         "# Executar a detecção com limiar de 90% de certeza no CLIP\n",
+        "# Por padrão usa 'amostras' se existir, ou '/content/foto_cand2024_SP' se o dataset do Drive foi extraído\n",
+        "pasta_fotos = '/content/foto_cand2024_SP' if os.path.exists('/content/foto_cand2024_SP') else 'amostras'\n",
+        "\n",
         "resultado = executar_deteccao_oculos_escuros_colab(\n",
-        "    input_dir=\"amostras\",\n",
+        "    input_dir=pasta_fotos,\n",
         "    output_dir=\"irregular_oculos_escuros\",\n",
         "    clip_thresh=0.90\n",
         ")\n",
@@ -644,7 +670,7 @@ notebook_oculos = {
         "\n",
         "if fotos_irregulares:\n",
         "    print(f\"Exibindo {len(fotos_irregulares)} fotos irregulares:\")\n",
-        "    for f in fotos_irregulares:\n",
+        "    for f in fotos_irregulares[:20]:  # Exibe até as primeiras 20 para visualização\n",
         "        print(f\"📷 {f.name}\")\n",
         "        display(IPImage(filename=str(f), width=350))\n",
         "else:\n",
@@ -680,6 +706,166 @@ notebook_oculos = {
   "nbformat_minor": 2
 }
 
+# ==============================================================================
+# 📊 NOTEBOOK UNIFICADO: PROCESSAR DATASET COMPLETO SP (78k FOTOS)
+# ==============================================================================
+
+notebook_unificado = {
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# 📊 Analisador Unificado de Fotos de Candidatos (Lote SP 2024 — 78k Fotos)\n",
+        "\n",
+        "Este notebook executa o pipeline completo de detecção automatizada em lote no dataset do Estado de São Paulo (**78.000 fotos / 2GB**):\n",
+        "\n",
+        "1. **Detector de Acessórios de Cabeça** (chapéus, bonés, toucas, tiaras, capacetes, etc. via **YOLO-World >90%**)\n",
+        "2. **Detector Híbrido de Óculos Escuros** (lentes escuras de sol via **YOLO-World + CLIP >90%**)\n",
+        "\n",
+        "---"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 🛠️ Passo 1: Instalar Dependências e Desativar Alertas"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Instalar dependências necessárias para YOLO-World e CLIP no Colab\n",
+        "!pip install -q ultralytics transformers pillow pandas ftfy git+https://github.com/ultralytics/CLIP.git"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 📁 Passo 2: Localizar e Extrair 'foto_cand2024_SP_div.zip' do Google Drive\n",
+        "\n",
+        "Localiza automaticamente o arquivo `foto_cand2024_SP_div.zip` na mesma pasta do notebook no seu Google Drive, copia para o SSD ultrarrápido do Colab e descompacta em segundos."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": code_opcao_b
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 🧢 Passo 3: Executar Detecção 1/2 — Acessórios de Cabeça (>90% Confiança)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Executar o detector de acessórios de cabeça no dataset descompactado\n",
+        "input_dir = '/content/foto_cand2024_SP' if os.path.exists('/content/foto_cand2024_SP') else 'amostras'\n",
+        "res_cabeca = executar_deteccao_acessorios_cabeca_colab(\n",
+        "    input_dir=input_dir,\n",
+        "    output_dir='irregular_acessorios_cabeca',\n",
+        "    conf_thresh=0.90\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 🕶️ Passo 4: Executar Detecção 2/2 — Óculos Escuros (>90% Confiança)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Executar o detector híbrido de óculos escuros no dataset descompactado\n",
+        "input_dir = '/content/foto_cand2024_SP' if os.path.exists('/content/foto_cand2024_SP') else 'amostras'\n",
+        "res_oculos = executar_deteccao_oculos_escuros_colab(\n",
+        "    input_dir=input_dir,\n",
+        "    output_dir='irregular_oculos_escuros',\n",
+        "    clip_thresh=0.90\n",
+        ")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 📊 Passo 5: Resumo Geral e Exibição de DataFrames"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "print('=' * 70)\n",
+        "print('RESUMO DA ANÁLISE DO DATASET COMPLETO SP 2024')\n",
+        "print('=' * 70)\n",
+        "if res_cabeca:\n",
+        "    print(f\"🧢 Acessórios de Cabeça Irregulares: {res_cabeca['total_irregulares']} de {res_cabeca['total_fotos']} fotos\")\n",
+        "if res_oculos:\n",
+        "    print(f\"🕶️ Óculos Escuros Irregulares:       {res_oculos['total_irregulares']} de {res_oculos['total_fotos']} fotos\")\n",
+        "print('=' * 70)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 💾 Passo 6: Salvar Backup no Google Drive e Baixar Resultados (.zip)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Compactar relatórios e imagens detectadas para download no computador\n",
+        "!zip -r resultados_sp_2024.zip irregular_acessorios_cabeca irregular_oculos_escuros\n",
+        "\n",
+        "# Fazer backup direto na pasta do seu Google Drive se o Drive estiver montado\n",
+        "if os.path.exists('/content/drive/MyDrive'):\n",
+        "    backup_drive = zip_found.parent if (zip_found and zip_found.parent.exists()) else Path('/content/drive/MyDrive')\n",
+        "    !cp resultados_sp_2024.zip \"{backup_drive}/\"\n",
+        "    print(f\"-> Backup do pacote de resultados salvo com sucesso no Drive em: '{backup_drive}'!\")\n",
+        "\n",
+        "from google.colab import files\n",
+        "files.download('resultados_sp_2024.zip')"
+      ]
+    }
+  ],
+  "metadata": {
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 2
+}
+
+# Inject Step 3 definition functions into notebook_unificado so that functions exist
+notebook_unificado["cells"].insert(5, notebook_oculos["cells"][7])  # executar_deteccao_oculos_escuros_colab
+notebook_unificado["cells"].insert(5, notebook_cabeca["cells"][7])  # executar_deteccao_acessorios_cabeca_colab
+
 # Salvar notebooks
 with open("detectar_acessorios_cabeca_colab.ipynb", "w", encoding="utf-8") as f:
     json.dump(notebook_cabeca, f, ensure_ascii=False, indent=2)
@@ -692,5 +878,11 @@ with open("detectar_oculos_escuros_colab.ipynb", "w", encoding="utf-8") as f:
 
 with open("detectar_oculos_escuros.ipynb", "w", encoding="utf-8") as f:
     json.dump(notebook_oculos, f, ensure_ascii=False, indent=2)
+
+with open("analisar_fotos_sp_colab.ipynb", "w", encoding="utf-8") as f:
+    json.dump(notebook_unificado, f, ensure_ascii=False, indent=2)
+
+with open("analisar_fotos_sp.ipynb", "w", encoding="utf-8") as f:
+    json.dump(notebook_unificado, f, ensure_ascii=False, indent=2)
 
 print("Todos os notebooks Colab foram gerados e salvos com sucesso!")
