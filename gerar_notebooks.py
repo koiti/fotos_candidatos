@@ -8,7 +8,7 @@ notebook_cabeca = {
       "source": [
         "# 🧢 Detector de Acessórios de Cabeça em Fotos de Candidatos (Google Colab)\n",
         "\n",
-        "Este notebook executa a detecção de **acessórios de cabeça** (chapéus, bonés, toucas, tiaras, capacetes, turbantes, etc.) utilizando **YOLOS-Fashionpedia (Hugging Face Transformers)** com limiar de **confiança estrito superior a 90% (>0.90)**.\n",
+        "Este notebook executa a detecção de **acessórios de cabeça** (chapéus, bonés, toucas, tiaras, capacetes, turbantes, etc.) em fotos de candidatos com limiar de **confiança estrito superior a 90% (>0.90)**.\n",
         "\n",
         "---"
       ]
@@ -26,8 +26,8 @@ notebook_cabeca = {
       "metadata": {},
       "outputs": [],
       "source": [
-        "# Instalar Hugging Face Transformers, PyTorch, Pillow e Pandas\n",
-        "!pip install -q transformers pillow pandas torch torchvision"
+        "# Instalar as dependências do YOLO-World e processamento de imagem\n",
+        "!pip install -q ultralytics transformers pillow pandas"
       ]
     },
     {
@@ -98,7 +98,7 @@ notebook_cabeca = {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## 🧠 Passo 3: Código do Detector de Acessórios de Cabeça (YOLOS-Fashionpedia)"
+        "## 🧠 Passo 3: Código do Detector de Acessórios de Cabeça"
       ]
     },
     {
@@ -114,25 +114,34 @@ notebook_cabeca = {
         "from pathlib import Path\n",
         "from datetime import datetime\n",
         "from PIL import Image, ImageDraw, ImageFont, ImageOps\n",
-        "from transformers import pipeline\n",
+        "from ultralytics import YOLO\n",
         "from IPython.display import display, Image as IPImage\n",
         "import pandas as pd\n",
         "\n",
         "# Verificar aceleração por GPU no Colab\n",
-        "device = 0 if torch.cuda.is_available() else -1\n",
-        "print(f'Dispositivo de inferência no Colab: {\"GPU (CUDA)\" if device == 0 else \"CPU\"}')\n",
+        "device = 'cuda' if torch.cuda.is_available() else 'cpu'\n",
+        "print(f'Dispositivo de inferência no Colab: {device.upper()}')\n",
         "\n",
-        "CLASSES_CABECA_MAP = {\n",
-        "    'hat': 'chapéu/boné',\n",
-        "    'headband, head covering, hair accessory': 'acessório de cabeça',\n",
-        "    'hood': 'capuz'\n",
+        "CLASSES_CABETA_MAP = {\n",
+        "    'hat': 'chapéu',\n",
+        "    'cap': 'boné',\n",
+        "    'baseball cap': 'boné',\n",
+        "    'headband': 'tiara/faixa',\n",
+        "    'head covering': 'cobertura de cabeça',\n",
+        "    'hood': 'capuz',\n",
+        "    'bonnet': 'touca',\n",
+        "    'turban': 'turbante',\n",
+        "    'helmet': 'capacete',\n",
+        "    'beret': 'boina',\n",
+        "    'beanie': 'gorro'\n",
         "}\n",
+        "PROMPTS = list(CLASSES_CABETA_MAP.keys())\n",
         "\n",
         "def executar_deteccao_acessorios_cabeca_colab(\n",
         "    input_dir='amostras',\n",
         "    output_dir='irregular_acessorios_cabeca',\n",
         "    conf_thresh=0.90,\n",
-        "    batch_size=32\n",
+        "    batch_size=64\n",
         "):\n",
         "    target_input = Path(input_dir)\n",
         "    target_output = Path(output_dir)\n",
@@ -147,9 +156,10 @@ notebook_cabeca = {
         "        print(f\"Nenhuma foto encontrada na pasta '{target_input}'!\")\n",
         "        return None\n",
         "\n",
-        "    print(f\"Analisando {len(fotos)} fotos em '{target_input}' com limiar de {conf_thresh:.0%}...\")\n",
-        "    print('Carregando modelo YOLOS-Fashionpedia (Hugging Face)...')\n",
-        "    detector = pipeline('object-detection', model='valentinafevu/yolos-fashionpedia', device=device)\n",
+        "    print(f\"Analizando {len(fotos)} fotos em '{target_input}' com limiar de {conf_thresh:.0%}...\")\n",
+        "    print('Carregando modelo YOLO-World...')\n",
+        "    model = YOLO('yolov8s-worldv2.pt')\n",
+        "    model.set_classes(PROMPTS)\n",
         "\n",
         "    total_irregulares = 0\n",
         "    resultados_detalhados = []\n",
@@ -171,32 +181,36 @@ notebook_cabeca = {
         "        if not bimgs:\n",
         "            continue\n",
         "\n",
-        "        results = detector(bimgs, threshold=conf_thresh)\n",
+        "        results = model.predict(source=bimgs, conf=conf_thresh, batch=batch_size, device=device, verbose=False)\n",
         "\n",
-        "        for foto_path, img_rgb, res_list in zip(vfiles, bimgs, results):\n",
+        "        for foto_path, img_rgb, res in zip(vfiles, bimgs, results):\n",
         "            irregularidades = []\n",
-        "            for item in res_list:\n",
-        "                lbl_en = item['label']\n",
-        "                c_val = float(item['score'])\n",
-        "                box = item['box']\n",
-        "                if lbl_en in CLASSES_CABECA_MAP and c_val >= conf_thresh:\n",
-        "                    lbl_pt = CLASSES_CABECA_MAP[lbl_en]\n",
-        "                    irregularidades.append({\n",
-        "                        'classe_en': lbl_en,\n",
-        "                        'classe_pt': lbl_pt,\n",
-        "                        'confianca': round(c_val, 4),\n",
-        "                        'bbox': [box['xmin'], box['ymin'], box['xmax'], box['ymax']]\n",
-        "                    })\n",
+        "            if len(res.boxes) > 0:\n",
+        "                boxes = res.boxes.xyxy.cpu().numpy()\n",
+        "                confs = res.boxes.conf.cpu().numpy()\n",
+        "                clss = res.boxes.cls.cpu().numpy().astype(int)\n",
+        "\n",
+        "                for box, conf, cls_idx in zip(boxes, confs, clss):\n",
+        "                    c_val = float(conf)\n",
+        "                    if c_val >= conf_thresh:\n",
+        "                        lbl_en = PROMPTS[cls_idx] if cls_idx < len(PROMPTS) else 'head accessory'\n",
+        "                        lbl_pt = CLASSES_CABETA_MAP.get(lbl_en, lbl_en)\n",
+        "                        irregularidades.append({\n",
+        "                            'classe_en': lbl_en,\n",
+        "                            'classe_pt': lbl_pt,\n",
+        "                            'confianca': round(c_val, 4),\n",
+        "                            'bbox': [round(float(c), 2) for c in box]\n",
+        "                        })\n",
         "\n",
         "            if irregularidades:\n",
         "                total_irregulares += 1\n",
         "                draw = ImageDraw.Draw(img_rgb)\n",
         "                for det in irregularidades:\n",
-        "                    b = det['bbox']\n",
+        "                    box = det['bbox']\n",
         "                    label_pt = det['classe_pt']\n",
         "                    conf = det['confianca']\n",
-        "                    draw.rectangle(b, outline='red', width=4)\n",
-        "                    draw.text((b[0] + 5, max(0, b[1] - 15)), f'{label_pt} ({conf:.1%})', fill='red')\n",
+        "                    draw.rectangle(box, outline='red', width=4)\n",
+        "                    draw.text((box[0] + 5, max(0, box[1] - 15)), f'{label_pt} ({conf:.1%})', fill='red')\n",
         "                img_rgb.save(target_output / foto_path.name)\n",
         "                print(f\" -> DETECTADO: {foto_path.name} | {irregularidades[0]['classe_pt']} ({irregularidades[0]['confianca']:.1%})\")\n",
         "\n",
@@ -209,7 +223,6 @@ notebook_cabeca = {
         "    t_total = time.time() - t_start\n",
         "    relatorio_data = {\n",
         "        'data_analise': datetime.now().isoformat(),\n",
-        "        'modelo': 'valentinafevu/yolos-fashionpedia',\n",
         "        'limiar_confianca': conf_thresh,\n",
         "        'total_fotos': len(fotos),\n",
         "        'total_irregulares': total_irregulares,\n",
@@ -310,351 +323,7 @@ notebook_cabeca = {
   "nbformat_minor": 2
 }
 
-notebook_oculos = {
-  "cells": [
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "# 🕶️ Detector de Óculos Escuros em Fotos de Candidatos (Google Colab)\n",
-        "\n",
-        "Este notebook executa a detecção híbrida de **óculos escuros (sunglasses)** utilizando **YOLOS-Fashionpedia + CLIP (Hugging Face Transformers)** com limiar de **confiança estrito superior a 90% (>0.90)**.\n",
-        "\n",
-        "Garante a **eliminação total de falsos positivos**, diferenciando óculos de grau transparentes de óculos escuros de sol.\n",
-        "\n",
-        "---"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 🛠️ Passo 1: Instalação das Bibliotecas Necessárias no Google Colab"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# Instalar Hugging Face Transformers, PyTorch, Pillow e Pandas\n",
-        "!pip install -q transformers pillow pandas torch torchvision"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 📁 Passo 2: Extrair Fotos de Amostra do GitHub (ou Montar Drive / Upload)\n",
-        "Escolha uma das opções abaixo no Colab. Por padrão, a **Opção A** baixa e extrai as fotos do repositório GitHub:\n",
-        "https://github.com/koiti/fotos_candidatos/tree/main/amostras"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# OPÇÃO A: Extrair fotos de amostra diretamente do GitHub (Recomendado)\n",
-        "# Repositório: https://github.com/koiti/fotos_candidatos/tree/main/amostras\n",
-        "import os\n",
-        "import shutil\n",
-        "\n",
-        "!git clone https://github.com/koiti/fotos_candidatos.git\n",
-        "\n",
-        "if os.path.exists('fotos_candidatos/amostras'):\n",
-        "    if os.path.exists('amostras'):\n",
-        "        shutil.rmtree('amostras')\n",
-        "    shutil.copytree('fotos_candidatos/amostras', 'amostras')\n",
-        "    print(\"-> Fotos de amostra extraídas com sucesso do GitHub para a pasta 'amostras'!\")"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# OPÇÃO B: Montar o seu Google Drive (recomendado para pastas grandes como foto_cand2024_SP)\n",
-        "from google.colab import drive\n",
-        "drive.mount('/content/drive')\n",
-        "\n",
-        "# Exemplo de caminho no seu Drive:\n",
-        "# input_path = '/content/drive/MyDrive/UFABC/2026-TOPICOS_DE_IA/foto_cand2024_SP'"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# OPÇÃO C: Fazer upload direto de um arquivo ZIP contendo as fotos (ex: amostras.zip)\n",
-        "from google.colab import files\n",
-        "import zipfile\n",
-        "import os\n",
-        "\n",
-        "print('Faça o upload do seu arquivo .zip com as fotos:')\n",
-        "uploaded = files.upload()\n",
-        "\n",
-        "for filename in uploaded.keys():\n",
-        "    if filename.endswith('.zip'):\n",
-        "        with zipfile.ZipFile(filename, 'r') as zip_ref:\n",
-        "            zip_ref.extractall('amostras')\n",
-        "        print('-> Arquivos extraídos com sucesso na pasta amostras!')"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 🧠 Passo 3: Código do Detector Híbrido de Óculos Escuros (YOLOS + CLIP)"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "import os\n",
-        "import json\n",
-        "import time\n",
-        "import torch\n",
-        "from pathlib import Path\n",
-        "from datetime import datetime\n",
-        "from PIL import Image, ImageDraw, ImageFont, ImageOps\n",
-        "from transformers import pipeline, CLIPProcessor, CLIPModel\n",
-        "from IPython.display import display, Image as IPImage\n",
-        "import pandas as pd\n",
-        "\n",
-        "# Verificar aceleração por GPU no Colab\n",
-        "device = 0 if torch.cuda.is_available() else -1\n",
-        "device_str = 'cuda' if torch.cuda.is_available() else 'cpu'\n",
-        "print(f'Dispositivo de inferência no Colab: {\"GPU (CUDA)\" if device == 0 else \"CPU\"}')\n",
-        "\n",
-        "CLIP_MODEL_NAME = 'openai/clip-vit-base-patch32'\n",
-        "CLIP_PROMPTS = [\n",
-        "    'dark black tinted sunglasses covering eyes',\n",
-        "    'clear transparent prescription reading eyeglasses with visible eyes'\n",
-        "]\n",
-        "\n",
-        "def executar_deteccao_oculos_escuros_colab(\n",
-        "    input_dir='amostras',\n",
-        "    output_dir='irregular_oculos_escuros',\n",
-        "    clip_thresh=0.90,\n",
-        "    batch_size=32\n",
-        "):\n",
-        "    target_input = Path(input_dir)\n",
-        "    target_output = Path(output_dir)\n",
-        "    target_output.mkdir(exist_ok=True, parents=True)\n",
-        "\n",
-        "    fotos = sorted([\n",
-        "        f for f in target_input.iterdir()\n",
-        "        if f.is_file() and f.suffix.lower() in {'.jpg', '.jpeg', '.png', '.bmp'}\n",
-        "    ])\n",
-        "\n",
-        "    if not fotos:\n",
-        "        print(f\"Nenhuma foto encontrada na pasta '{target_input}'!\")\n",
-        "        return None\n",
-        "\n",
-        "    print(f\"Analisando {len(fotos)} fotos em '{target_input}' com limiar CLIP de {clip_thresh:.0%}...\")\n",
-        "    print('1. Carregando YOLOS-Fashionpedia (Hugging Face)...')\n",
-        "    detector = pipeline('object-detection', model='valentinafevu/yolos-fashionpedia', device=device)\n",
-        "\n",
-        "    print('2. Carregando modelo CLIP para verificação semântica das lentes...')\n",
-        "    clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)\n",
-        "    clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device_str)\n",
-        "    print('Modelos inicializados com sucesso!')\n",
-        "\n",
-        "    total_irregulares = 0\n",
-        "    resultados_detalhados = []\n",
-        "    t_start = time.time()\n",
-        "\n",
-        "    for b_idx in range(0, len(fotos), batch_size):\n",
-        "        bfiles = fotos[b_idx:b_idx + batch_size]\n",
-        "        bimgs = []\n",
-        "        vfiles = []\n",
-        "        for f in bfiles:\n",
-        "            try:\n",
-        "                img = Image.open(f)\n",
-        "                img = ImageOps.exif_transpose(img).convert('RGB')\n",
-        "                bimgs.append(img)\n",
-        "                vfiles.append(f)\n",
-        "            except Exception:\n",
-        "                pass\n",
-        "\n",
-        "        if not bimgs:\n",
-        "            continue\n",
-        "\n",
-        "        results = detector(bimgs, threshold=0.20)\n",
-        "\n",
-        "        for foto_path, img_rgb, res_list in zip(vfiles, bimgs, results):\n",
-        "            irregularidades = []\n",
-        "            glasses_items = [item for item in res_list if item['label'] == 'glasses']\n",
-        "            if glasses_items:\n",
-        "                w, h = img_rgb.size\n",
-        "                for item in glasses_items:\n",
-        "                    box = item['box']\n",
-        "                    x1, y1, x2, y2 = box['xmin'], box['ymin'], box['xmax'], box['ymax']\n",
-        "                    bw, bh = x2 - x1, y2 - y1\n",
-        "                    cx1 = max(0, int(x1 - bw * 0.1))\n",
-        "                    cy1 = max(0, int(y1 - bh * 0.1))\n",
-        "                    cx2 = min(w, int(x2 + bw * 0.1))\n",
-        "                    cy2 = min(h, int(y2 + bh * 0.1))\n",
-        "\n",
-        "                    crop = img_rgb.crop((cx1, cy1, cx2, cy2))\n",
-        "                    inputs_clip = clip_processor(text=CLIP_PROMPTS, images=crop, return_tensors='pt', padding=True).to(device_str)\n",
-        "                    with torch.no_grad():\n",
-        "                        outputs_clip = clip_model(**inputs_clip)\n",
-        "                        probs = outputs_clip.logits_per_image.softmax(dim=-1)[0]\n",
-        "\n",
-        "                    prob_dark = float(probs[0])\n",
-        "                    prob_clear = float(probs[1])\n",
-        "\n",
-        "                    if prob_dark >= clip_thresh and prob_dark > prob_clear:\n",
-        "                        irregularidades.append({\n",
-        "                            'classe_en': 'dark sunglasses',\n",
-        "                            'classe_pt': 'óculos escuros',\n",
-        "                            'confianca_clip': round(prob_dark, 4),\n",
-        "                            'prob_oculos_grau': round(prob_clear, 4),\n",
-        "                            'bbox': [x1, y1, x2, y2]\n",
-        "                        })\n",
-        "\n",
-        "            if irregularidades:\n",
-        "                total_irregulares += 1\n",
-        "                draw = ImageDraw.Draw(img_rgb)\n",
-        "                for det in irregularidades:\n",
-        "                    box = det['bbox']\n",
-        "                    label_pt = det['classe_pt']\n",
-        "                    conf = det['confianca_clip']\n",
-        "                    draw.rectangle(box, outline='red', width=4)\n",
-        "                    draw.text((box[0] + 5, max(0, box[1] - 15)), f'{label_pt} ({conf:.1%})', fill='red')\n",
-        "                img_rgb.save(target_output / foto_path.name)\n",
-        "                print(f\" -> DETECTADO: {foto_path.name} | Óculos Escuros ({irregularidades[0]['confianca_clip']:.1%})\")\n",
-        "\n",
-        "            resultados_detalhados.append({\n",
-        "                'arquivo': foto_path.name,\n",
-        "                'status': 'irregular' if irregularidades else 'regular',\n",
-        "                'irregularidades': irregularidades\n",
-        "            })\n",
-        "\n",
-        "    t_total = time.time() - t_start\n",
-        "    relatorio_data = {\n",
-        "        'data_analise': datetime.now().isoformat(),\n",
-        "        'modelo': 'YOLOS-Fashionpedia + CLIP',\n",
-        "        'limiar_clip': clip_thresh,\n",
-        "        'total_fotos': len(fotos),\n",
-        "        'total_irregulares': total_irregulares,\n",
-        "        'tempo_execucao_segundos': round(t_total, 2),\n",
-        "        'resultados': resultados_detalhados\n",
-        "    }\n",
-        "\n",
-        "    relatorio_path = target_output / 'relatorio.json'\n",
-        "    with open(relatorio_path, 'w', encoding='utf-8') as f:\n",
-        "        json.dump(relatorio_data, f, ensure_ascii=False, indent=2)\n",
-        "\n",
-        "    print('\\n' + '=' * 70)\n",
-        "    print('VARREDURA CONCLUÍDA NO COLAB!')\n",
-        "    print(f'Total de fotos analisadas: {len(fotos)}')\n",
-        "    print(f'Irregulares salvas em \"{target_output}\": {total_irregulares}')\n",
-        "    print(f'Relatório salvo em: {relatorio_path}')\n",
-        "    return relatorio_data"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 🚀 Passo 4: Executar a Detecção"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# Executar a detecção com limiar de 90% de certeza no CLIP\n",
-        "resultado = executar_deteccao_oculos_escuros_colab(\n",
-        "    input_dir='amostras',\n",
-        "    output_dir='irregular_oculos_escuros',\n",
-        "    clip_thresh=0.90\n",
-        ")\n",
-        "\n",
-        "# Exibir dataframe com resultados irregulares\n",
-        "if resultado:\n",
-        "    df = pd.DataFrame(resultado['resultados'])\n",
-        "    display(df[df['status'] == 'irregular'])"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 🖼️ Passo 5: Visualizar Imagens Irregulares no Colab"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# Exibir fotos anotadas com bounding box vermelha\n",
-        "target = Path('irregular_oculos_escuros')\n",
-        "fotos_irregulares = sorted([f for f in target.glob('*.[jJ][pP]*[gG]')])\n",
-        "\n",
-        "if fotos_irregulares:\n",
-        "    print(f'Exibindo {len(fotos_irregulares)} fotos irregulares:')\n",
-        "    for f in fotos_irregulares:\n",
-        "        print(f'📷 {f.name}')\n",
-        "        display(IPImage(filename=str(f), width=350))\n",
-        "else:\n",
-        "    print('Nenhuma imagem irregular encontrada com mais de 90% de certeza!')"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {},
-      "source": [
-        "## 💾 Passo 6: Baixar Resultados (.zip)"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": None,
-      "metadata": {},
-      "outputs": [],
-      "source": [
-        "# Compactar a pasta de resultados e fazer download para seu computador\n",
-        "!zip -r irregular_oculos_escuros.zip irregular_oculos_escuros\n",
-        "from google.colab import files\n",
-        "files.download('irregular_oculos_escuros.zip')"
-      ]
-    }
-  ],
-  "metadata": {
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "nbformat": 4,
-  "nbformat_minor": 2
-}
-
 with open("detectar_acessorios_cabeca_colab.ipynb", "w", encoding="utf-8") as f:
     json.dump(notebook_cabeca, f, ensure_ascii=False, indent=2)
 
-with open("detectar_acessorios_cabeca.ipynb", "w", encoding="utf-8") as f:
-    json.dump(notebook_cabeca, f, ensure_ascii=False, indent=2)
-
-with open("detectar_oculos_escuros_colab.ipynb", "w", encoding="utf-8") as f:
-    json.dump(notebook_oculos, f, ensure_ascii=False, indent=2)
-
-with open("detectar_oculos_escuros.ipynb", "w", encoding="utf-8") as f:
-    json.dump(notebook_oculos, f, ensure_ascii=False, indent=2)
-
-print("Notebooks gerados com sucesso utilizando YOLOS-Fashionpedia (Hugging Face)!")
+print("detectar_acessorios_cabeca_colab.ipynb gerado com sucesso!")
