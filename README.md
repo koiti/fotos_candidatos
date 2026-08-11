@@ -1,6 +1,6 @@
 # Detecção Automatizada de Acessórios em Fotografias de Candidatos Eleitorais
 
-Este projeto realiza a verificação e detecção automatizada de **irregularidades eleitorais em fotografias de candidatos**, garantindo o cumprimento das diretrizes do Tribunal Superior Eleitoral (TSE).
+Este projeto realiza a verificação e detecção automatizada de **irregularidades eleitorais em fotografias de candidatos**, conforme diretrizes do Tribunal Superior Eleitoral (TSE).
 
 A solução utiliza uma arquitetura unificada baseada em **Visão Computacional e Inteligência Artificial Zero-Shot**:
 1. **Acessórios de Cabeça**: Identificação de chapéus, bonés, toucas, tiaras, capuzes, turbantes, capacetes, etc., utilizando o modelo **YOLO-World v2 (Zero-Shot)** com limiar de confiança configurável (padrão $\ge 90\%$).
@@ -12,7 +12,7 @@ A solução utiliza uma arquitetura unificada baseada em **Visão Computacional 
 
 | Arquivo | Descrição |
 | :--- | :--- |
-| `detectar_irregularidades.py` | Script em Python (CLI) para execução em ambiente local ou servidores. |
+| `detectar_irregularidades.py` | Script em Python (CLI) para execução em ambiente local. |
 | `detectar_irregularidades.ipynb` | Notebook Jupyter otimizado para execução interativa no **Google Colab**. |
 | `amostras/` | Diretório padrão contendo fotografias de amostra para testes e validação. |
 
@@ -57,8 +57,7 @@ O notebook `detectar_irregularidades.ipynb` foi desenvolvido para execução no 
 
 #### Funcionalidades no Colab:
 - **Instalação Automática**: Instala as dependências necessárias (`ultralytics`, `transformers`, `pillow`, etc.) na sessão do Colab.
-- **Amostras do GitHub**: Baixa automaticamente o repositório de amostras disponibilizado em [https://github.com/koiti/fotos_candidatos](https://github.com/koiti/fotos_candidatos) para testes rápidos (Opção A).
-- **Processamento de Grandes Datasets**: Permite integrar com o Google Drive para descompactar e processar conjuntos maiores (ex: `foto_cand2024_SP_div.zip` contendo dezenas de milhares de fotos) diretamente no SSD acelerado por GPU do Colab (Opção B).
+- **Amostras do GitHub**: Baixa automaticamente o repositório de amostras disponibilizado em [https://github.com/koiti/fotos_candidatos](https://github.com/koiti/fotos_candidatos) para testes rápidos.
 - **Visualização Interativa**: Exibe os resultados, tabelas de métricas e imagens com caixas delimitadoras diretamente no notebook.
 
 ---
