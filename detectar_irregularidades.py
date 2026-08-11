@@ -1,12 +1,11 @@
 """
-Detector Unificado de Irregularidades em Fotos de Candidatos
+Detecção automatizada de acessórios em fotografias de candidatos eleitorais
 ============================================================
 
 Este script realiza a detecção unificada de 2 categorias de irregularidades:
 1. Acessórios de Cabeça (chapéus, bonés, toucas, tiaras, capuzes, turbantes, capacetes, etc.)
 2. Óculos Escuros (lentes escuras de sol via filtro híbrido YOLO-World + CLIP Zero-Shot)
 
-Reporta métricas de desempenho (mAP@50, Precision e Recall) por classe e gera relatórios estruturados.
 """
 
 import os
@@ -336,7 +335,7 @@ def executar_deteccao_irregularidades(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Detector Unificado de Irregularidades em Fotos de Candidatos")
+    parser = argparse.ArgumentParser(description="Detecção automatizada de acessórios em fotografias de candidatos eleitorais")
     parser.add_argument("--input_dir", type=str, default="amostras", help="Pasta com as fotos para análise (default: amostras)")
     parser.add_argument("--output_dir", type=str, default="irregularidades", help="Pasta para salvar fotos irregulares (default: irregularidades)")
     parser.add_argument("--conf_thresh", type=float, default=0.90, help="Limiar de confiança para acessórios de cabeça (default: 0.90)")
