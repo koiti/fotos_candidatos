@@ -1,8 +1,8 @@
-# Detecção Automatizada de Acessórios em Fotografias de Candidatos Eleitorais
+# Detecção automatizada de acessórios em fotografias de candidatos eleitorais
 
 Este projeto realiza a verificação e detecção automatizada de **irregularidades eleitorais em fotografias de candidatos**, conforme diretrizes do Tribunal Superior Eleitoral (TSE).
 
-A solução utiliza uma arquitetura unificada baseada em **Visão Computacional e Inteligência Artificial Zero-Shot**:
+A solução utiliza uma arquitetura baseada em **Visão Computacional e Inteligência Artificial Zero-Shot**:
 1. **Acessórios de Cabeça**: Identificação de chapéus, bonés, toucas, tiaras, capuzes, turbantes, capacetes, etc., utilizando o modelo **YOLO-World v2 (Zero-Shot)** com limiar de confiança configurável (padrão $\ge 90\%$).
 2. **Óculos Escuros**: Detecção de lentes escuras de sol que ocultam os olhos do candidato, via filtro híbrido composto por **YOLO-World** (localização da região dos olhos/óculos) + **CLIP Zero-Shot** (classificação entre óculos escuros opacos e óculos de grau transparentes, com limiar $\ge 90\%$).
 
