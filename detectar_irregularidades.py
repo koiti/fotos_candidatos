@@ -103,7 +103,7 @@ def calcular_ap_classe(gt_boxes, pred_boxes, pred_scores, iou_thresh=0.50):
 
 
 def calcular_metricas_detalhadas(preds_by_img, target_classes=TARGET_CLASSES):
-    """Calcula estatísticas e métricas de desempenho por classe de irregularidade."""
+    """Calcula a quantidade total de detecções e confiança média por categoria."""
     resumo_classes = {}
     for cls in target_classes:
         total_deteccoes = 0
@@ -115,23 +115,25 @@ def calcular_metricas_detalhadas(preds_by_img, target_classes=TARGET_CLASSES):
                     confs.append(d.get('confianca', 0.0))
 
         mean_conf = float(np.mean(confs)) if confs else 0.0
-        # Em analise sem ground truth annotations manuais prévias,
-        # calculamos a taxa de prevalência e precisão interna de confiança
         resumo_classes[cls] = {
             'total_detectado': total_deteccoes,
-            'confianca_media': round(mean_conf, 4),
-            'precision': round(mean_conf, 4) if total_deteccoes > 0 else 0.0,
-            'recall': 1.0 if total_deteccoes > 0 else 0.0,
-            'ap50': round(mean_conf, 4) if total_deteccoes > 0 else 0.0
+            'confianca_media': round(mean_conf, 4)
         }
 
-    aps = [resumo_classes[c]['ap50'] for c in target_classes if resumo_classes[c]['total_detectado'] > 0]
-    mAP50 = round(float(np.mean(aps)), 4) if aps else 0.0
-
     return {
-        'mAP50': mAP50,
         'por_classe': resumo_classes
     }
+
+
+def obter_dispositivo(device_solicitado="auto"):
+    """Detecta e configura o dispositivo de hardware (GPU/CUDA, MPS ou CPU)."""
+    if device_solicitado and device_solicitado.lower() != "auto":
+        return device_solicitado.lower()
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def executar_deteccao_irregularidades(
@@ -139,7 +141,8 @@ def executar_deteccao_irregularidades(
     output_dir="irregularidades",
     conf_thresh=0.90,
     clip_thresh=0.90,
-    batch_size=32
+    batch_size=32,
+    device="auto"
 ):
     """Executa o pipeline unificado de detecção de irregularidades."""
     target_input = Path(input_dir)
@@ -159,23 +162,32 @@ def executar_deteccao_irregularidades(
         print(f"Nenhuma foto encontrada em '{target_input}'!")
         return None
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    target_device = obter_dispositivo(device)
+    if target_device.startswith('cuda'):
+        gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA'
+        device_info = f"GPU CUDA ({gpu_name})"
+    elif target_device == 'mps':
+        device_info = "GPU Apple Silicon (MPS)"
+    else:
+        device_info = "CPU (GPU/CUDA não detectado. Para aceleração em GPU NVIDIA, instale PyTorch com suporte CUDA)"
+
     print("=" * 80)
     print("DETECTOR UNIFICADO DE IRREGULARIDADES EM FOTOS DE CANDIDATOS")
     print("=" * 80)
     print(f"Diretório de entrada: '{target_input}' ({len(fotos)} fotos)")
     print(f"Diretório de saída:   '{target_output}'")
-    print(f"Dispositivo de IA:    {device.upper()}")
+    print(f"Dispositivo de IA:    {device_info}")
     print(f"Limiar de Confiança:  Acessórios de Cabeça (>={conf_thresh:.0%}) | Óculos Escuros CLIP (>={clip_thresh:.0%})")
     print("-" * 80)
 
     # 1. Carregar Modelo CLIP para validação de óculos escuros
-    print("1. Carregando modelo CLIP Zero-Shot (openai/clip-vit-base-patch32)...")
+    print(f"1. Carregando modelo CLIP Zero-Shot (openai/clip-vit-base-patch32) na {target_device.upper()}...")
     clip_proc = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')
-    clip_model = CLIPModel.from_pretrained('openai/clip-vit-base-patch32').to(device)
+    clip_model = CLIPModel.from_pretrained('openai/clip-vit-base-patch32', use_safetensors=True).to(target_device)
+    clip_model.eval()
 
     # 2. Carregar Modelos YOLO-World
-    print("2. Carregando modelo YOLO-World (yolov8s-worldv2.pt)...")
+    print(f"2. Carregando modelos YOLO-World (yolov8s-worldv2.pt) na {target_device.upper()}...")
     model_cabeca = YOLO('yolov8s-worldv2.pt')
     model_cabeca.set_classes(PROMPTS_CABECA)
 
@@ -206,11 +218,23 @@ def executar_deteccao_irregularidades(
         if not bimgs:
             continue
 
-        # A. Inferência de Acessórios de Cabeça
-        res_c = model_cabeca.predict(source=bimgs, conf=conf_thresh, batch=len(bimgs), device=device, verbose=False)
+        # A. Inferência de Acessórios de Cabeça em GPU/CPU
+        res_c = model_cabeca.predict(
+            source=bimgs,
+            conf=conf_thresh,
+            batch=len(bimgs),
+            device=target_device,
+            verbose=False
+        )
 
-        # B. Inferência de Óculos
-        res_o = model_oculos.predict(source=bimgs, conf=0.20, batch=len(bimgs), device=device, verbose=False)
+        # B. Inferência de Óculos em GPU/CPU
+        res_o = model_oculos.predict(
+            source=bimgs,
+            conf=0.20,
+            batch=len(bimgs),
+            device=target_device,
+            verbose=False
+        )
 
         for foto_path, img_rgb, rc, ro in zip(vfiles, bimgs, res_c, res_o):
             irregularidades = []
@@ -235,7 +259,7 @@ def executar_deteccao_irregularidades(
                             'bbox': [round(float(c), 2) for c in box]
                         })
 
-            # 2. Processar Óculos Escuros via CLIP
+            # 2. Processar Óculos Escuros via CLIP Zero-Shot em GPU
             if len(ro.boxes) > 0:
                 boxes_o = ro.boxes.xyxy.cpu().numpy()
                 for box in boxes_o:
@@ -247,7 +271,7 @@ def executar_deteccao_irregularidades(
                     cy2 = min(h, int(y2 + bh * 0.1))
 
                     crop = img_rgb.crop((cx1, cy1, cx2, cy2)) if (cx2 > cx1 and cy2 > cy1) else img_rgb.crop((max(0, x1), max(0, y1), min(w, x2), min(h, y2)))
-                    inputs_c = clip_proc(text=CLIP_PROMPTS, images=crop, return_tensors='pt', padding=True).to(device)
+                    inputs_c = clip_proc(text=CLIP_PROMPTS, images=crop, return_tensors='pt', padding=True).to(target_device)
 
                     with torch.no_grad():
                         probs = clip_model(**inputs_c).logits_per_image.softmax(dim=-1)[0]
@@ -299,6 +323,7 @@ def executar_deteccao_irregularidades(
     relatorio_data = {
         "data_analise": datetime.now().isoformat(),
         "modelo": "YOLO-World + CLIP Zero-Shot",
+        "dispositivo": device_info,
         "limiar_confianca_cabeca": conf_thresh,
         "limiar_clip_oculos": clip_thresh,
         "total_fotos": len(fotos),
@@ -312,16 +337,15 @@ def executar_deteccao_irregularidades(
     with open(relatorio_path, "w", encoding="utf-8") as f:
         json.dump(relatorio_data, f, ensure_ascii=False, indent=2)
 
-    # Exibir Tabela de Métricas e Resumo Final
+    # Exibir Tabela de Resumo Final
     print("\n" + "=" * 80)
     print("📊 RESUMO FINAL DA DETECÇÃO DE IRREGULARIDADES")
     print("=" * 80)
     print(f"Total de Fotos Analisadas:      {len(fotos)}")
     print(f"Fotografias Irregulares Salvas: {total_irregulares} (em '{target_output}')")
-    print(f"mAP @ 0.50 Geral:               {metricas['mAP50']:.4f}")
     print(f"Tempo Total de Execução:        {t_total:.2f} segundos")
     print("-" * 80)
-    print("MÉTRICAS DETALHADAS POR CLASSE:")
+    print("TOTAL DETECTADO POR CATEGORIA:")
     print("-" * 80)
 
     df_metricas = pd.DataFrame.from_dict(metricas['por_classe'], orient='index')
@@ -341,6 +365,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf_thresh", type=float, default=0.90, help="Limiar de confiança para acessórios de cabeça (default: 0.90)")
     parser.add_argument("--clip_thresh", type=float, default=0.90, help="Limiar de probabilidade CLIP para óculos escuros (default: 0.90)")
     parser.add_argument("--batch_size", type=int, default=32, help="Tamanho do lote para inferência (default: 32)")
+    parser.add_argument("--device", type=str, default="auto", help="Dispositivo de aceleração: 'auto', 'cuda', 'cuda:0', 'cpu', 'mps' (default: auto)")
 
     args = parser.parse_args()
 
@@ -349,5 +374,6 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         conf_thresh=args.conf_thresh,
         clip_thresh=args.clip_thresh,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        device=args.device
     )

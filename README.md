@@ -48,6 +48,7 @@ python detectar_irregularidades.py --input_dir foto_cand2024_SP --output_dir irr
 - `--conf_thresh`: Limiar de confiança para detecção de acessórios de cabeça *(default: `0.90`)*.
 - `--clip_thresh`: Limiar de probabilidade CLIP para óculos escuros *(default: `0.90`)*.
 - `--batch_size`: Tamanho do lote (*batch size*) para inferência em GPU/CPU *(default: `32`)*.
+- `--device`: Dispositivo de hardware para inferência: `'auto'`, `'cuda'`, `'cuda:0'`, `'cpu'`, `'mps'` *(default: `auto`)*.
 
 ---
 
@@ -72,8 +73,20 @@ pip install torch ultralytics transformers pillow pandas numpy scikit-learn ftfy
 
 ---
 
-## 📊 Resultados e Métricas
+## 📊 Resultados e Resumo de Detecções
 
 Após o processamento, os seguintes artefatos são gerados no diretório de saída:
 - **Fotos Anotadas**: Imagens em que foram encontradas irregularidades, demarcadas com caixas delimitadoras (*bounding boxes*) e identificação da classe com percentual de confiança.
-- **Relatório JSON (`relatorio.json`)**: Arquivo contendo a data da análise, configurações de limiar utilizados, total de imagens processadas e irregulares, tempo total e métricas de desempenho ($mAP@50$, Precisão, Recall e F1-Score) por classe.
+- **Relatório JSON (`relatorio.json`)**: Arquivo contendo a data da análise, limiares utilizados, contagens totais, tempo de execução e a tabela de resumo por categoria.
+
+Como a análise é realizada sobre fotografias brutas sem rotulação prévia (*Ground Truth*), não são apresentadas métricas de desempenho supervisionadas (Precisão, Recall, AP@50). O relatório exibe **apenas o total detectado e a confiança média por categoria**:
+
+```text
+TOTAL DETECTADO POR CATEGORIA:
+                     total_detectado  confianca_media
+chapéu/boné                       68           0.9405
+tiara/faixa                        0           0.0000
+cobertura de cabeça                0           0.0000
+capuz                              0           0.0000
+óculos escuros                    68           0.9466
+```
