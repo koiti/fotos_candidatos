@@ -78,15 +78,3 @@ pip install torch ultralytics transformers pillow pandas numpy scikit-learn ftfy
 Após o processamento, os seguintes artefatos são gerados no diretório de saída:
 - **Fotos Anotadas**: Imagens em que foram encontradas irregularidades, demarcadas com caixas delimitadoras (*bounding boxes*) e identificação da classe com percentual de confiança.
 - **Relatório JSON (`relatorio.json`)**: Arquivo contendo a data da análise, limiares utilizados, contagens totais, tempo de execução e a tabela de resumo por categoria.
-
-Como a análise é realizada sobre fotografias brutas sem rotulação prévia (*Ground Truth*), não são apresentadas métricas de desempenho supervisionadas (Precisão, Recall, AP@50). O relatório exibe **apenas o total detectado e a confiança média por categoria**:
-
-```text
-TOTAL DETECTADO POR CATEGORIA:
-                     total_detectado  confianca_media
-chapéu/boné                       68           0.9405
-tiara/faixa                        0           0.0000
-cobertura de cabeça                0           0.0000
-capuz                              0           0.0000
-óculos escuros                    68           0.9466
-```
